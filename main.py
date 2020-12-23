@@ -22,6 +22,10 @@ app.secret_key = 'lunch.time!'
 path_prefix = '/var/www/wordfreq/wordfreq/'
 path_prefix = './' # comment this line in deployment
 
+global fresh, currentPage
+fresh = True
+currentPage = ""
+
 def get_random_image(path):
     img_path = random.choice(glob.glob(os.path.join(path, '*.jpg')))
     return img_path[img_path.rfind('/static'):]
@@ -71,7 +75,6 @@ def get_expiry_date(username):
         return  result[0]['expiry_date']
     else:
         return '20191024'
-    
 
 
 def within_range(x, y, r):
@@ -80,7 +83,6 @@ def within_range(x, y, r):
 
 # @req 0022
 def get_today_article(user_word_list):
-
     rq = RecordQuery(path_prefix + 'static/wordfreqapp.db')
     rq.instructions("SELECT * FROM article")
     rq.do()
@@ -113,7 +115,7 @@ def get_today_article(user_word_list):
     s += '<p><i>%s</i></p>' % (d['source'])
     s += '<p><b>%s</b></p>' % (get_question_part(d['question']))
     s = s.replace('\n', '<br/>')    
-    s += '%s' % (get_answer_part(d['question']))    
+    s += '%s' % (get_answer_part(d['question']))
     return s
 
 
@@ -187,7 +189,6 @@ def mark_word():
         return redirect(url_for('mainpage'))
     else:
         return 'Under construction'
-
 
 
 @app.route("/", methods=['GET', 'POST'])
@@ -265,20 +266,18 @@ def user_mark_word(username):
         return 'Under construction'
 
 
-
 @app.route("/<username>", methods=['GET', 'POST'])
 def userpage(username):
-    
+    global fresh, currentPage
     if not session.get('logged_in'):
         return '<p>请先<a href="/login">登录</a>。</p>'
 
     user_expiry_date = session.get('expiry_date')
     if datetime.now().strftime('%Y%m%d') > user_expiry_date:
         return '<p>账号 %s 过期。</p> <p><a href="/logout">登出</a></p>' % (username)
-
     
     username = session.get('username')
-    user_freq_record = path_prefix + 'static/frequency/' +  'frequency_%s.pickle' % (username)
+    user_freq_record = path_prefix + 'static/frequency/' + 'frequency_%s.pickle' % (username)
     
     # @req 76f0
     if request.method == 'POST':  # when we submit a form
@@ -296,10 +295,12 @@ def userpage(username):
             count += 1
         page += ' <input type="submit" value="加入我的生词簿"/>\n'
         page += '</form>\n'
+        fresh = False
+
         return page
 
     # @req 0022
-    elif request.method == 'GET': # when we load a html page
+    elif request.method == 'GET':  # when we load a html page
         page = '<meta charset="UTF8">\n'
         page += '<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0, user-scalable=yes" />\n'
         page += '<meta name="format-detection" content="telephone=no" />\n' # forbid treating numbers as cell numbers in smart phones
@@ -309,7 +310,14 @@ def userpage(username):
         page += '<p><a href="/%s">下一篇</a></p>' % (username)
         page += '<p><b>阅读文章并回答问题</b></p>\n'
         # @req 0022 1
-        page += '<div id="text-content">%s</div>'  % (get_today_article(user_freq_record))
+        if fresh:
+            s = get_today_article(user_freq_record)
+            currentPage = s
+        else:
+            s = currentPage
+            fresh = True
+
+        page += '<div id="text-content">%s</div>' % (s)
         page += '<p><b>收集生词吧</b> （可以在正文中划词，也可以复制黏贴）</p>'
         page += '<form method="post" action="/%s">' % (username)
         page += ' <textarea name="content" id="selected-words" rows="10" cols="120"></textarea><br/>'
@@ -352,8 +360,7 @@ def userpage(username):
                         page += '<p><a href="%s">%s</a> <font color="white">(<a title="%s">%d</a>)</a></p>\n' % (youdao_link(word), word, '; '.join(d[word]), freq)
                 elif isinstance(d[word], int): # d[word] is a frequency. to migrate from old format.
                     page += '<a href="%s">%s</a>%d\n' % (youdao_link(word), word, freq)                    
-                    
-                
+
         return page
 
 
